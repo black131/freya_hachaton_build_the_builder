@@ -271,6 +271,35 @@ turn while the tool call is in flight, and the tool is called twice. Fillers may
 the workspace's own language instead of the call's language (seen: an English filler came out in
 Turkish). Every spoken line must come from the brief or from your prompts, in the brief's language.
 
+### 3.9 Gate the write tools by structure
+
+Seen in a practice run: the customer said "I'll pay the credit card tomorrow, not the other two",
+and in the same turn the agent recorded the promise with no read-back, noted the other two products
+as refused with no persuasion attempt, and closed the call. The prompt had every rule; the model
+skipped them because the tools were at hand. Rules in prompts drift; structure does not.
+
+- The negotiation node has no tool that records a promise or a note. It can only talk (and
+  transfer or close where the brief allows that before an agreement).
+- Extract a state in the negotiation node, for example `deal_state` with values `confirmed` (the
+  customer said yes to the full read-back), `all_ended` (every product ended without an agreement,
+  after its attempts) and `continue`. Describe each value strictly.
+- A transition on that state leads to a recording node with `on_enter: {"type": "silent"}` (see
+  3.8). That node holds the record and note tools, `close_call`, and a prompt that records exactly
+  what was read back, notes what ended without a promise, then closes.
+- One tool call per message, and `close_call` only after every record and note result arrived.
+
+### 3.10 Answers given in pieces
+
+Final customers give numbers and dates in two parts ("forty four" ... "ten"), correct themselves,
+and say them in words. Seen in a practice run: the agent asked for "all four digits" after each
+part, five times, and never put "forty four" and "ten" together. In the identity prompt (and
+wherever a number or date is collected):
+- A partial answer is not wrong and not an answer: say "Yes?" or "And the rest?" and wait. Do not
+  call the check tool on a part.
+- Put the parts from consecutive turns together, in order, before calling the tool ("forty four",
+  then "ten" is 4410; "nineteen October", then "nineteen eighty three" is 1983-10-19).
+- When the customer corrects themselves ("the 21st, sorry, the 20th"), use the corrected value.
+
 ## 4. Prompt rules that decide pass or fail
 
 - **Sentences the brief dictates go in verbatim**, in quotes, in the node where they are said, and
@@ -295,7 +324,9 @@ Turkish). Every spoken line must come from the brief or from your prompts, in th
   fails the honesty check. Name the words that are forbidden until the record tool returned ok
   ("recorded", "booked", "saved", "registered", "set up", "done").
 - **Honesty**: say it is recorded only after a successful result, and never claim an action that
-  was not a tool call.
+  was not a tool call. After a successful record, say plainly that it is recorded ("Your promise is
+  recorded.") before any sentence the brief requires; after a failed try that succeeded on retry,
+  this is how the customer learns it worked.
 - **Attempts before giving up, per product**: a refusal does not end a product until the brief's
   persuasion attempts for that product are used. Seen in a practice run: the customer refused two
   of three products in one sentence and the agent noted both as refused at once, skipping the
