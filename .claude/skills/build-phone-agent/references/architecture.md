@@ -282,7 +282,8 @@ skipped them because the tools were at hand. Rules in prompts drift; structure d
   transfer or close where the brief allows that before an agreement).
 - Extract a state in the negotiation node, for example `deal_state` with values `confirmed` (the
   customer said yes to the full read-back), `all_ended` (every product ended without an agreement,
-  after its attempts) and `continue`. Describe each value strictly.
+  and for each refused product every attempt listed in the account facts was said and refused;
+  one refusal of a product that has two attempts is not an end) and `continue`. Describe each value strictly.
 - A transition on that state leads to a recording node with `on_enter: {"type": "silent"}` (see
   3.8). That node holds the record and note tools, `close_call`, and a prompt that records exactly
   what was read back, notes what ended without a promise, then closes.
@@ -334,5 +335,11 @@ wherever a number or date is collected):
   refuses: make attempt 1 as written in the account facts; if refused again and the product has
   attempt 2, make it; only then record the refusal (note, outcome)." When several products are
   refused together, go through them one at a time in the account order.
+  Seen again, with amounts said in words: the agent made one attempt on a product that had two.
+  So write the attempts in the account facts as numbered, ready-to-say sentences, for example
+  "Attempt 1: ask for <full amount> on <date>. Attempt 2 (REQUIRED after attempt 1 is refused):
+  offer <floor> on <deadline>.", and give the product a line "This product ends only after
+  attempt <n> is refused." In the negotiation prompt: before you treat a product as ended, check
+  in the account facts that every attempt listed for it was said and refused.
 - **Keep prompts short.** Every rule in a prompt costs attention. Put rules where they apply, not
   in every node.
