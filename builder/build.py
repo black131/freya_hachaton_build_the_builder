@@ -1,6 +1,7 @@
 """Builder: reads a bank's brief and its tool API file, creates the phone agent on Freya.
 
     python builder/build.py BRIEF.md [MORE_BRIEFS.md ...] TOOL_API.json
+    python builder/build.py CASE_FOLDER_OR_ZIP MOCK_URL        (final format: a folder of bank documents)
 
 Examples:
     python builder/build.py briefs/brief-a.md tools/openapi.json
@@ -122,9 +123,27 @@ def one_line(text, n=140):
     return " ".join(str(text).split())[:n]
 
 
-async def build(briefs, tool_api, slot, trace):
+def case_prompt(case, slot, py):
+    return (
+        "Use the build-phone-agent skill to build a phone agent.\n"
+        f"Case: {case['source']}. It is a folder of the bank's documents (brief, readme, analysis, flow drawing, "
+        "announcements, service contract, test customers, Q&A, example conversations). Every document, converted to "
+        f"text, is listed in {case['index']}: read that index first, then every file it lists. Open PDFs and images "
+        "it marks with the Read tool. Follow the skill's section 'Case folders'.\n"
+        f"Bank API: the team's mock bank serves the service contract at {case['mock_url']}. Every tool URL starts there.\n"
+        f"Before step 4, write the tool API file out/{slot}.openapi.json (OpenAPI 3) from the service contract, with "
+        f"servers[0].url = {case['mock_url']}; it is the tool API file for the rest of the skill (lint included).\n"
+        f"Slot: {slot} (use it for out/ file names and for freya.save_workflow).\n"
+        f"You have {LIMIT_S // 60} minutes in total from now, tests included. Run `date` to keep track.\n"
+        f"Python: run every Python command with \"{py}\" (quoted). It is the interpreter this builder runs on, with working network certificates. Do not use another python.\n"
+        f"Write only files named {slot}* in out/. Do not open, read or copy any other file in out/ or out/_other/: those belong to other briefs and their rules do not apply here.\n"
+        "Never write a rule, value or name into any file outside out/ and the workflow you save."
+    )
+
+
+async def build(briefs, tool_api, slot, trace, case=None):
     py = sys.executable.replace("\\", "/")
-    prompt = (
+    prompt = case_prompt(case, slot, py) if case else (
         "Use the build-phone-agent skill to build a phone agent.\n"
         f"Brief files: {' '.join(briefs)}\n"
         f"Tool API file: {tool_api}\n"
@@ -185,7 +204,7 @@ async def consume(stream, trace, slot, pending):
                     if "run_cases.py" in arg:
                         trace.line("    TEST " + arg)
                         for l in str(out).splitlines():
-                            if l.startswith(("PASS", "FAIL")) or "passed" in l: trace.line("      " + l[:200])
+                            if l.startswith(("PASS", "FAIL")) or "passed" in l or l.strip().startswith("- "): trace.line("      " + l[:260])
                         score = re.search(r"(\d+) / (\d+) passed", str(out))
                         if not score and getattr(trace, "guard_used", None) and trace.guard_used["tests"] > 0:
                             trace.guard_used["tests"] -= 1      # a platform error (504, crash) gave no result: not counted
@@ -204,13 +223,23 @@ async def consume(stream, trace, slot, pending):
 
 def main():
     args = sys.argv[1:]
-    if len(args) < 2 or not args[-1].endswith(".json"):
-        sys.exit(__doc__)
-    briefs, tool_api = args[:-1], args[-1]
-    for p in briefs + [tool_api]:
-        if not (KIT / p).exists() and not pathlib.Path(p).exists():
-            sys.exit(f"not found: {p}")
-    slot = pathlib.Path(briefs[-1]).stem
+    case = None
+    if len(args) == 2 and re.match(r"https?://", args[1]):
+        src = pathlib.Path(args[0]) if pathlib.Path(args[0]).exists() else KIT / args[0]
+        if not src.exists():
+            sys.exit(f"not found: {args[0]}")
+        src = src.resolve()
+        slot = re.sub(r"[^a-z0-9]+", "-", src.stem.lower()).strip("-") or "case"
+        case = {"source": str(src), "mock_url": args[1].rstrip("/")}
+        briefs, tool_api = [str(src)], f"out/{slot}.openapi.json"
+    else:
+        if len(args) < 2 or not args[-1].endswith(".json"):
+            sys.exit(__doc__)
+        briefs, tool_api = args[:-1], args[-1]
+        for p in briefs + [tool_api]:
+            if not (KIT / p).exists() and not pathlib.Path(p).exists():
+                sys.exit(f"not found: {p}")
+        slot = pathlib.Path(briefs[-1]).stem
     os.chdir(KIT)        # freya.save_workflow keeps its slot file in the working directory
     # Files that earlier runs left in out/ for other briefs are moved aside, so this run starts clean
     # and cannot copy another brief's rules by accident.
@@ -225,10 +254,18 @@ def main():
             f.rename(target)
     trace = Trace(slot)
     t0 = time.time()
+    if case:
+        sys.path.insert(0, str(KIT / "builder"))
+        import materials
+        index, rows = materials.convert(case["source"], out / f"{slot}_materials")
+        case["index"] = str(index.relative_to(KIT)).replace("\\", "/")
+        trace.line(f"case {case['source']}: {len(rows)} files, text in {case['index']}; mock bank {case['mock_url']}")
+        for a, b, c, d in rows:
+            trace.line(f"    {a}: {c or d}")
     trace.line(f"start {now()}")
     trace.line(f"briefs {briefs}, tool API {tool_api}, slot {slot}, builder model {MODEL}, limit {LIMIT_S} s")
     try:
-        asyncio.run(build(briefs, tool_api, slot, trace))
+        asyncio.run(build(briefs, tool_api, slot, trace, case))
     except (asyncio.TimeoutError, TimeoutError):
         trace.line(f"time limit of {LIMIT_S} s reached: stopping the builder agent. The last saved workflow stands.")
     except Exception as e:

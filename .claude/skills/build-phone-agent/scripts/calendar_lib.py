@@ -37,9 +37,22 @@ def to_date(value):
     return _dt.date.fromisoformat(str(value)[:10])
 
 
+_TR_DAYS = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
+_TR_MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz",
+              "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"]
+_LANG = ["en"]
+
+
+def set_language(code):
+    """'tr' makes spoken() and money() produce Turkish (26 Ekim 2026 Pazartesi, 1.250,50 TL)."""
+    _LANG[0] = "tr" if str(code).lower().startswith("tr") else "en"
+
+
 def spoken(d):
-    """Monday 26 October 2026"""
+    """Monday 26 October 2026 (en) or 26 Ekim 2026 Pazartesi (tr)"""
     d = to_date(d)
+    if _LANG[0] == "tr":
+        return "%d %s %d %s" % (d.day, _TR_MONTHS[d.month - 1], d.year, _TR_DAYS[d.weekday()])
     return "%s %d %s %d" % (_DAY_NAMES[d.weekday()], d.day, _MONTHS[d.month - 1], d.year)
 
 
@@ -196,9 +209,23 @@ def read_list(vars_, *names):
     return []
 
 
-def money(x):
-    """Format an amount the way a person reads it: 420 -> 420.00"""
+def money(x, currency=""):
+    """Format an amount the way a person reads it: 420 -> 420.00 (en), 1250.5 -> 1.250,50 (tr).
+    currency is appended when given, e.g. money(x, "TL")."""
     try:
-        return "%.2f" % float(x)
+        v = float(x)
     except Exception:
         return str(x)
+    if _LANG[0] == "tr":
+        text = ("%.2f" % v).replace(".", "#")
+        whole, frac = text.split("#")
+        sign = "-" if whole.startswith("-") else ""
+        whole = whole.lstrip("-")
+        groups = []
+        while len(whole) > 3:
+            groups.insert(0, whole[-3:]); whole = whole[:-3]
+        groups.insert(0, whole)
+        text = sign + ".".join(groups) + "," + frac
+    else:
+        text = "%.2f" % v
+    return text + (" " + currency if currency else "")

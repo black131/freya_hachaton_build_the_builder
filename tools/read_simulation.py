@@ -31,7 +31,8 @@ def main(sim_id):
         ok = r.get("outcome") == "pass"; passed += ok
         print(("PASS" if ok else "FAIL"), str(name)[:40], "|", " > ".join(tools) or "(no bank tool calls)")
         if not ok: print("       -", " ".join(str(r.get("reason") or "no verdict").split())[:300])
-    print(f"\n{passed} / {len(runs)} passed by the judge (simulation {sim_id}, status {s.get('status')}).")
+    print(f"\n{passed} / {len(runs)} passed the conversation judge (simulation {sim_id}, status {s.get('status')}).")
+    print("This is the judge only. run_cases.py also checks the bank records (dates, amounts, notes); its FAIL lines and reasons are in the --out file under rows[].failed.")
 
 if __name__ == "__main__":
     if len(sys.argv) != 2: sys.exit(__doc__)

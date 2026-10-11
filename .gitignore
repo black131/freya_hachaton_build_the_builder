@@ -4,3 +4,5 @@ env.sh
 .personas.json
 results/
 out/
+node_modules/
+.wrangler/

@@ -124,7 +124,7 @@ If `FREYA_API_KEY` is not set, you cannot reach the platform: do steps 1 to 5, t
    (`--brief B` when you were given Brief B.) Final customers talk like people: when time allows,
    add `--style pieces` or `--style in_words` to a run. A run takes 3 to 11 minutes. Never start it in the
    background and never end your turn while it runs: the builder stops when you stop.
-   For any other brief there are no practice customers on the mock bank, and the kit's customers
+   For any other brief or case there are no practice customers on the practice service, and the kit's customers
    follow other rules. Do not run them; steps 3, 5 and 6 are your tests.
 
 8. **Fix what failed**, at most once or twice, as time allows. First rule out the platform: if
@@ -145,6 +145,40 @@ If `FREYA_API_KEY` is not set, you cannot reach the platform: do steps 1 to 5, t
 
    End with one line: `workflow_id`, `agent_id`, steps lint/validate/chat passed, and the last
    practice result if there was one.
+
+## Case folders (a folder of bank documents, a mock URL, a Turkish call)
+
+When the builder gives you a case folder instead of a brief file, these points change the steps above.
+
+- **Read everything, in this order:** the index of converted files, then BRIEF and README, then the
+  announcements and the Q&A (they change or clarify rules: the latest dated one wins over the brief
+  and over the analysis), the service contract (it is the tool API), the flow drawing (the order of
+  the call), the analysis, the test customers and the example conversations. Example conversations
+  show tone and fixed wording; if some are marked as bad examples, take only what they say not to do.
+  The spec (step 2) names the document each rule comes from.
+- **Tool API file:** write `out/<slot>.openapi.json` from the service contract before step 4: one
+  path per operation, `operationId` = the contract's operation name, request fields with types,
+  required lists and enums exactly as the contract says, `servers[0].url` = the mock URL you were
+  given. Tool URLs in the workflow are the mock URL plus the path.
+- **Call variables:** the README or the contract says which variables a call starts with (customer
+  id, name, date and time...). Use exactly those names in the workflow; bake the customer id into
+  every tool as before. Run the lint with `--vars <those names, comma separated>`. The lint expects
+  JSON-body operations whose last path segment is the operation name; if the contract uses path or
+  query parameters, a lint error about them may be wrong: check it against the contract, and say so
+  in the final line instead of bending the workflow to the lint.
+- **Language: Turkish.** The agent speaks Turkish in every line: the system prompt starts by saying
+  the call is held in Turkish only; fixed lines from the documents are used word for word; every
+  sentence built in code is Turkish. In code snippets call `set_language("tr")` right after the
+  helpers, so `spoken()` gives "26 Ekim 2026 Pazartesi" and `money(x, "TL")` gives "1.250,50 TL" (use
+  the currency word the documents use). Customers say numbers and dates in Turkish words ("bin iki
+  yüz elli", "yirmi altı ekim"): the prompts of extracting nodes say so and ask for digits in the
+  extracted value. Enum values stay plain ASCII keys; their descriptions may be Turkish.
+- **Tests:** there are no practice customers on the Freya practice service for a case, and the
+  builder denies simulations. Your tests are the local snippet runs (build the example vars from
+  the case's test customers), the lint and the chat check. For the chat check use a test customer
+  whose id the mock knows and the call variables the README names, not `c_test`; with a known
+  customer the bank tools answer, so the first two or three turns show identity checking too. The
+  three-turn chat limit still holds.
 
 ## Rules
 
