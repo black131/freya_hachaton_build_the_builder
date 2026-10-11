@@ -1,18 +1,23 @@
 import json, sys, urllib.request, time
 B = sys.argv[1].rstrip("/") + "/voice/v1/"
 D = json.load(open(sys.argv[2]))
+def parse(status, raw):
+    try: return status, json.loads(raw)
+    except Exception: return status, {"_not_json": raw[:300].decode("utf-8", "replace")}
 def post(svc, data):
-    req = urllib.request.Request(B + svc, json.dumps({"data": data, "call": {"ani": "5000000000", "lang": "tr"}}).encode(), {"content-type": "application/json"})
+    req = urllib.request.Request(B + svc, json.dumps({"data": data, "call": {"ani": "5000000000", "lang": "tr"}}).encode(),
+                                 {"content-type": "application/json", "user-agent": "Mozilla/5.0 (verify)", "accept": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=30) as r: return r.status, json.loads(r.read())
-    except urllib.error.HTTPError as e: return e.code, json.loads(e.read())
+        with urllib.request.urlopen(req, timeout=30) as r: return parse(r.status, r.read())
+    except urllib.error.HTTPError as e: return parse(e.code, e.read())
 ok = bad = 0
 def check(svc, data, entry):
     global ok, bad
     s, body = post(svc, data)
     if s == entry["http"] and body == entry["response"]: ok += 1
     else:
-        bad += 1; print("MISMATCH", svc, data, s, entry["http"])
+        bad += 1; print("MISMATCH", svc, data, "got", s, "want", entry["http"], str(body)[:200])
+        if bad >= 5: print("stopping after 5 mismatches"); sys.exit(1)
 for c in D["customers"]:
     no = c["customerNo"]
     for svc, t in c["services"].items():

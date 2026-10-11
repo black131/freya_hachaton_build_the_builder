@@ -209,6 +209,52 @@ def read_list(vars_, *names):
     return []
 
 
+def read_obj(vars_, *prefixes):
+    """Rebuild the object an api call returned from the flattened keys the engine writes, e.g.
+    read_obj(vars, 'fetch_balance_response.data.data') -> dict with nested dicts and lists.
+    Several prefixes may be given; the first that has keys wins. Returns {} when none has.
+    Values keep the engine's form (booleans and nulls arrive as strings 'true' / 'null')."""
+    for prefix in prefixes:
+        v = vars_.get(prefix)
+        if isinstance(v, dict):
+            return v
+        if isinstance(v, str) and v.strip().startswith("[") is False and v.strip().startswith("{"):
+            try:
+                return _json.loads(v)
+            except Exception:
+                pass
+        root = dict()
+        p = prefix + "."
+        found = False
+        for k, val in vars_.items():
+            k = str(k)
+            if not k.startswith(p):
+                continue
+            found = True
+            parts = k[len(p):].split(".")
+            node = root
+            for i, part in enumerate(parts):
+                last = i == len(parts) - 1
+                if last:
+                    node[part] = val
+                else:
+                    node = node.setdefault(part, dict())
+                    if not isinstance(node, dict):
+                        break
+        if found:
+            return _listify(root)
+    return dict()
+
+
+def _listify(node):
+    if not isinstance(node, dict):
+        return node
+    fixed = dict((k, _listify(v)) for k, v in node.items())
+    if fixed and all(str(k).isdigit() for k in fixed):
+        return [fixed[k] for k in sorted(fixed, key=int)]
+    return fixed
+
+
 def money(x, currency=""):
     """Format an amount the way a person reads it: 420 -> 420.00 (en), 1250.5 -> 1.250,50 (tr).
     currency is appended when given, e.g. money(x, "TL")."""

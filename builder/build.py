@@ -80,13 +80,20 @@ def practice_brief_letter(slot):
     return letter if letter in letters else None
 
 
-def make_guard(slot, trace):
-    used = {"chat": 0, "tests": 0}
+MAX_CASE_SIMS = int(os.environ.get("BUILDER_MAX_CASE_SIMS", "2"))
+
+
+def make_guard(slot, trace, case=False):
+    used = {"chat": 0, "tests": 0, "case_sims": 0}
     trace.guard_used = used
     allowed_letter = practice_brief_letter(slot)
 
     def command_text(cmd):
         text = cmd
+        rest = re.sub(r'^\s*(cd\s+("[^"]*"|\S+)\s*(;|&&)\s*)*', "", cmd)
+        first = rest.split()
+        if first and first[0] in ("grep", "sed", "cat", "head", "tail", "wc", "ls") and not re.search(r"[;&]|\|\s*(python|py|\S*python\S*)\b", rest):
+            return text                                  # reading a file is not running it
         for path in re.findall(r"[\w./\\-]+\.py", cmd):     # also look inside scripts the command runs
             f = (KIT / path) if not os.path.isabs(path) else pathlib.Path(path)
             try:
@@ -101,6 +108,12 @@ def make_guard(slot, trace):
 
     async def guard(hook_input, tool_use_id, context):
         cmd = str((hook_input.get("tool_input") or {}).get("command", ""))
+        if case and "sim_check.py" in cmd:
+            # a case folder: its test customers live on the team's mock, so a few hand-written customers can test the agent
+            if used["case_sims"] >= MAX_CASE_SIMS:
+                return deny(f"the limit of {MAX_CASE_SIMS} simulation checks per build is reached. Finish with what you have.")
+            used["case_sims"] += 1
+            return {}
         text = command_text(cmd)
         if "run_cases" in text or "/api/v2/simulations" in text or "run_simulation" in text:
             if not allowed_letter:
@@ -163,7 +176,7 @@ async def build(briefs, tool_api, slot, trace, case=None):
         allowed_tools=["Read", "Write", "Edit", "Glob", "Grep", "Bash"],
         permission_mode="dontAsk",
         max_turns=200,
-        hooks={"PreToolUse": [HookMatcher(matcher="Bash", hooks=[make_guard(slot, trace)])]},
+        hooks={"PreToolUse": [HookMatcher(matcher="Bash", hooks=[make_guard(slot, trace, bool(case))])]},
         env={"PYTHON": py, "BASH_DEFAULT_TIMEOUT_MS": "900000", "BASH_MAX_TIMEOUT_MS": "1200000", "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"},
     )
     # The SDK's cleanup after a stop (time limit, error) reports through the loop's exception
@@ -214,6 +227,10 @@ async def consume(stream, trace, slot, pending):
                         wf_file = KIT / "out" / f"{slot}.workflow.json"
                         if score and wf_file.exists():
                             trace.tests.append({"passed": int(score.group(1)), "total": int(score.group(2)), "workflow": wf_file.read_text(encoding="utf-8")})
+                    elif "sim_check.py" in arg:
+                        trace.line("    SIM CHECK " + one_line(arg, 120))
+                        for l in str(out).splitlines():
+                            if ": PASS" in l or ": FAIL" in l or l.startswith("simulation "): trace.line("      " + l[:220])
                     elif "lint_workflow.py" in arg:
                         last = [l for l in str(out).splitlines() if l.strip()]
                         trace.line("    LINT " + (last[-1][:160] if last else "(no output)"))

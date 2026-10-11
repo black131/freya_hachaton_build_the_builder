@@ -1,0 +1,14 @@
+[
+ {"name": "Tek kart borç sorgusu",
+  "prompt": "Sen Freya Bank müşterisi Ada Örnek'sin. Bankayı aradın, telefon menüsünden geçtin ve asistana aktarıldın. Türkçe konuşursun. Kredi kartının ekstre borcunu ve son ödeme tarihini öğrenmek istiyorsun. Borcu öğrendikten sonra başka bir şey istemediğini söyle ve teşekkür et.",
+  "success": "Asistan Türkçe konuşur, müşteri numarası sormaz, kartın ekstre borcunu (5.000,13 TL civarı) ve son ödeme tarihini (15 Ekim 2026) söyler, sonunda müşteriyi ana menüye yönlendirir.",
+  "variables": {"customerNumber": "90000001", "now": "2026-10-12T10:30:00+03:00"}},
+ {"name": "Çok kartlı müşteri",
+  "prompt": "Sen Freya Bank müşterisi Ilgaz Güler'sin. Türkçe konuşursun. Birden fazla kredi kartın var. Asistan hangi kartı sorduğunda 'Yıldız Tasarım' de. Borcu öğrendikten sonra başka bir şey istemediğini söyle.",
+  "success": "Asistan hangi kart olduğunu sorar, müşteri Yıldız Tasarım deyince o kartın borcunu ve son ödeme tarihini söyler, kart numarasının son dört hanesinden fazlasını söylemez.",
+  "variables": {"customerNumber": "92030487", "now": "2026-10-12T10:30:00+03:00"}},
+ {"name": "Ekstreyi e-postayla isteme",
+  "prompt": "Sen Freya Bank müşterisi Ada Örnek'sin. Türkçe konuşursun. Önce borcunu dinle, sonra ekstrenin kayıtlı e-posta adresine gönderilmesini iste. Asistan adresi okuyup onay isteyince açıkça 'evet' de. Sonra başka bir şey istemediğini söyle.",
+  "success": "Asistan kayıtlı e-posta adresini okuyup onay ister, müşteri evet deyince ekstreyi gönderir ve 'Ekstreniz kayıtlı e-posta adresinize gönderildi.' gibi bir cümle söyler.",
+  "variables": {"customerNumber": "90000001", "now": "2026-10-12T10:30:00+03:00"}}
+]

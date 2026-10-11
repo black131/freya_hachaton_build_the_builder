@@ -261,7 +261,7 @@ Seen in a trial call: the result of an `api_call` is an envelope around the HTTP
 
 `data` is the JSON body the API returned. `header` holds the HTTP response headers.
 
-The engine also writes every result into the variable table by itself, flattened with dots. You do not need a mapping for these. For a tool named `check_answer` whose API returned `{"ok": true, "verified": true, "attempts_left": 3}`, the trial call's variable table held:
+The engine also writes every result into the variable table by itself, flattened with dots. (Verified later: for a call in `pre_actions` the prefix is the **node** name, `<node>_response`, not the tool name; a `response_mapping` to a list or object does not create a variable, only scalar mappings do. See the skill, "Reading API answers in code".) You do not need a mapping for these. For a tool named `check_answer` whose API returned `{"ok": true, "verified": true, "attempts_left": 3}`, the trial call's variable table held:
 
 | Variable | Value |
 |---|---|

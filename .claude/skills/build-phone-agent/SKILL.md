@@ -202,12 +202,32 @@ When the builder gives you a case folder instead of a brief file, these points c
   the currency word the documents use). Customers say numbers and dates in Turkish words ("bin iki
   yüz elli", "yirmi altı ekim"): the prompts of extracting nodes say so and ask for digits in the
   extracted value. Enum values stay plain ASCII keys; their descriptions may be Turkish.
+- **Reading API answers in code (verified on the platform, holds for every build).** The engine
+  writes each answer as flattened keys. For a `pre_actions` call the keys are named after the
+  **node**, not the tool: `<node name>_response.data.<path>` (a node `fetch_cards` gives
+  `fetch_cards_response.data.data.cards.0.cardNumber`); for a tool in a conversation node they are
+  named after the tool. A `response_mapping` to a scalar works (`data.result.returnCode` → a string);
+  a mapping to a **list or object never arrives** as a variable. So in code read lists and objects
+  with the helpers: `read_obj(vars, '<node>_response.data.data', '<tool>_response.data.data')` rebuilds
+  the bank's `data` object (nested dicts and lists), `read_list(...)` a list. The HTTP status is
+  `<node>_response.status_code`. Never give a variable the name of a node (the engine has
+  `<node>.current_turns` keys). Test each snippet locally on `vars` written in this flattened form.
+- **Simulation check (case folders).** The chat check can time out (504) on a call whose first steps
+  are api and code nodes; do not retry it more than once. The real test: after saving, write
+  `out/<slot>_personas.json` with three or four customers taken from the example scenarios and the
+  test customers (an ordinary one-card call, a several-card call, an e-mail or change request, one
+  edge case), each `{"name", "prompt" (in the call's language: who they are, what they want, how they
+  answer), "success" (what the agent must say or do), "variables" (the call variables, with a test
+  customer the mock knows)}`, then run in the foreground (3 to 8 minutes):
+  `"$PYTHON" tools/sim_check.py <agent_id> out/<slot>_personas.json`. Read every transcript it
+  prints. An agent that ends the call at once, reads wrong values or never calls a tool has a
+  structural bug: find it (usually how code reads an answer), fix it in the build script, save, and
+  run the check once more. At most two checks per build.
 - **Tests:** there are no practice customers on the Freya practice service for a case, and the
-  builder denies simulations. Your tests are the local snippet runs (build the example vars from
+  builder denies `run_cases.py`. Your tests are the local snippet runs (build the example vars from
   the case's test customers), the lint and the chat check. For the chat check use a test customer
-  whose id the mock knows and the call variables the README names, not `c_test`; with a known
-  customer the bank tools answer, so the first two or three turns show identity checking too. The
-  three-turn chat limit still holds.
+  whose id the mock knows and the call variables the README names, not `c_test`. The three-turn
+  chat limit still holds. Then the simulation check above.
 
 ## Rules
 
