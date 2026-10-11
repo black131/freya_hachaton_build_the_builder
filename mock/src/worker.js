@@ -51,7 +51,9 @@ async function service(name, request) {
   const svc = SERVICES[name];
   let body;
   try { body = await request.json(); } catch { return invalid("request body must be JSON"); }
-  const data = (body && typeof body.data === "object" && body.data) ? body.data : {};
+  // Contract envelope {data, call}. A body sent without the envelope (fields at the top level) is read the same way.
+  const data = (body && typeof body.data === "object" && body.data) ? body.data
+             : (body && typeof body === "object" ? Object.fromEntries(Object.entries(body).filter(([k]) => k !== "call")) : {});
   const template = Object.values(data).some(isTemplate);
   if (!template) for (const f of svc.required) if (!text(data[f])) return invalid(`${FIELD_TEXT[f]} cannot be empty`);
 

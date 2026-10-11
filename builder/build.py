@@ -80,7 +80,7 @@ def practice_brief_letter(slot):
     return letter if letter in letters else None
 
 
-MAX_CASE_SIMS = int(os.environ.get("BUILDER_MAX_CASE_SIMS", "2"))
+MAX_CASE_SIMS = int(os.environ.get("BUILDER_MAX_CASE_SIMS", "3"))
 
 
 def make_guard(slot, trace, case=False):
@@ -108,7 +108,10 @@ def make_guard(slot, trace, case=False):
 
     async def guard(hook_input, tool_use_id, context):
         cmd = str((hook_input.get("tool_input") or {}).get("command", ""))
-        if case and "sim_check.py" in cmd:
+        runs_sim = re.search(r'(python[\w.]*|\bpy|\$\{?PYTHON\}?|\$\{?P\}?|python\.exe)"?\s+"?[\w./\\:-]*sim_check\.py', cmd)
+        if case and "sim_check.py" in cmd and not runs_sim:
+            return {}                                    # reading or searching the script is not a simulation
+        if case and runs_sim:
             # a case folder: its test customers live on the team's mock, so a few hand-written customers can test the agent
             if used["case_sims"] >= MAX_CASE_SIMS:
                 return deny(f"the limit of {MAX_CASE_SIMS} simulation checks per build is reached. Finish with what you have.")
@@ -227,7 +230,7 @@ async def consume(stream, trace, slot, pending):
                         wf_file = KIT / "out" / f"{slot}.workflow.json"
                         if score and wf_file.exists():
                             trace.tests.append({"passed": int(score.group(1)), "total": int(score.group(2)), "workflow": wf_file.read_text(encoding="utf-8")})
-                    elif "sim_check.py" in arg:
+                    elif re.search(r'sim_check\.py\s+\S+\s+\S+', arg) and not re.match(r'\s*(cd [^;]*;\s*)?(grep|sed|cat|head)', arg):
                         trace.line("    SIM CHECK " + one_line(arg, 120))
                         for l in str(out).splitlines():
                             if ": PASS" in l or ": FAIL" in l or l.startswith("simulation "): trace.line("      " + l[:220])

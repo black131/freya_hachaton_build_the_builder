@@ -206,12 +206,26 @@ When the builder gives you a case folder instead of a brief file, these points c
   writes each answer as flattened keys. For a `pre_actions` call the keys are named after the
   **node**, not the tool: `<node name>_response.data.<path>` (a node `fetch_cards` gives
   `fetch_cards_response.data.data.cards.0.cardNumber`); for a tool in a conversation node they are
-  named after the tool. A `response_mapping` to a scalar works (`data.result.returnCode` → a string);
+  named after the **tool** (`select_card_response.data.data.debtTL.statementDebt`, verified too).
+  Keys from an earlier call stay in the table, and keys of a call that never ran do not exist. When
+  one code node can be reached after different calls (a pre_action on one path, a tool on another),
+  do not guess the source: have each path set a plain variable naming it (the tool's post-hook
+  returns `route`/`source` in its result, a code node on the other path sets `source`), or give each
+  path its own code node. Test the snippet locally for every path, with `vars` holding only the keys
+  that path really produces. A `response_mapping` to a scalar works (`data.result.returnCode` → a string);
   a mapping to a **list or object never arrives** as a variable. So in code read lists and objects
   with the helpers: `read_obj(vars, '<node>_response.data.data', '<tool>_response.data.data')` rebuilds
   the bank's `data` object (nested dicts and lists), `read_list(...)` a list. The HTTP status is
   `<node>_response.status_code`. Never give a variable the name of a node (the engine has
   `<node>.current_turns` keys). Test each snippet locally on `vars` written in this flattened form.
+- **Ending on what the customer says.** Never end the call from an extracted enum such as "nothing
+  else" or "thanks": the extraction runs on the same turn as the customer's request, so "thanks, can
+  you also send me the statement?" ends the call before the request is heard (seen in a
+  simulation). Ending because the customer wants nothing more is the model's decision through the
+  closing tool, whose description says to use it only when the customer asked for nothing further.
+  Keep extracted enums for situations the documents name as exits on their own (asks for a person,
+  wants to pay, another person's card, another language), and say in each description that a thanks
+  or a filler is not that value.
 - **Simulation check (case folders).** The chat check can time out (504) on a call whose first steps
   are api and code nodes; do not retry it more than once. The real test: after saving, write
   `out/<slot>_personas.json` with three or four customers taken from the example scenarios and the
@@ -222,7 +236,7 @@ When the builder gives you a case folder instead of a brief file, these points c
   `"$PYTHON" tools/sim_check.py <agent_id> out/<slot>_personas.json`. Read every transcript it
   prints. An agent that ends the call at once, reads wrong values or never calls a tool has a
   structural bug: find it (usually how code reads an answer), fix it in the build script, save, and
-  run the check once more. At most two checks per build.
+  run the check once more. At most three checks per build.
 - **Tests:** there are no practice customers on the Freya practice service for a case, and the
   builder denies `run_cases.py`. Your tests are the local snippet runs (build the example vars from
   the case's test customers), the lint and the chat check. For the chat check use a test customer
