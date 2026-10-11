@@ -1,0 +1,10 @@
+{
+  "team": "<New Builders>",
+  "members": [{ "name": "<Metehan Tirpan>", "email": "<metehantirpan@gmail.com>" }],
+  "repo": "https://github.com/black131/freya_hachaton_build_the_builder",
+  "commit": "<1c985e6>",
+  "run_command": "python builder/build.py {case_folder} https://freya-team-bank-mock.metehan-freya.workers.dev",
+  "workflow": "submission/final.workflow.json",
+  "trace": "traces/final.log",
+  "mock_url": "https://freya-team-bank-mock.metehan-freya.workers.dev"
+}
