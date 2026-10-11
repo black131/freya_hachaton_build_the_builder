@@ -24,6 +24,14 @@ import re
 from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, HookMatcher, ResultMessage, TextBlock, ToolResultBlock, ToolUseBlock, UserMessage, query
 
 KIT = pathlib.Path(__file__).resolve().parent.parent
+
+# Windows consoles (and output piped through Tee-Object) often use a legacy code page that cannot
+# print characters such as an arrow. Never let printing a trace line crash the builder.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 sys.path.insert(0, str(KIT))
 MODEL = os.environ.get("BUILDER_MODEL", "claude-opus-5-5")
 LIMIT_S = int(os.environ.get("BUILDER_LIMIT_S", str(28 * 60)))     # the event allows 30 minutes per brief
@@ -43,7 +51,13 @@ class Trace:
         self.tests = []     # one entry per practice run: passed, total, and the workflow file that was tested
 
     def line(self, text):
-        print(text, flush=True)
+        try:
+            print(text, flush=True)
+        except Exception:
+            try:
+                print(text.encode("ascii", "replace").decode("ascii"), flush=True)
+            except Exception:
+                pass
         self.log.write(text + "\n"); self.log.flush()
 
     def message(self, m):
@@ -131,8 +145,26 @@ async def build(briefs, tool_api, slot, trace):
         hooks={"PreToolUse": [HookMatcher(matcher="Bash", hooks=[make_guard(slot, trace)])]},
         env={"PYTHON": py, "BASH_DEFAULT_TIMEOUT_MS": "900000", "BASH_MAX_TIMEOUT_MS": "1200000", "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"},
     )
+    # The SDK's cleanup after a stop (time limit, error) reports through the loop's exception
+    # handler; send that to the trace instead of a red traceback on the console.
+    asyncio.get_running_loop().set_exception_handler(
+        lambda loop, ctx: trace.line("    (async cleanup: " + one_line(ctx.get("message", ""), 120) + ")"))
     pending = {}
-    async for m in query(prompt=prompt, options=options):
+    stream = query(prompt=prompt, options=options)
+    try:
+        # The time limit runs in this task, so the SDK stream is stopped and closed in the task
+        # that opened it (asyncio.wait_for would close it from another task and crash the cleanup).
+        async with asyncio.timeout(LIMIT_S):
+            await consume(stream, trace, slot, pending)
+    finally:
+        try:
+            await stream.aclose()
+        except (Exception, asyncio.CancelledError):
+            pass
+
+
+async def consume(stream, trace, slot, pending):
+    async for m in stream:
         trace.message(m)
         if isinstance(m, AssistantMessage):
             trace.calls += 1
@@ -196,8 +228,8 @@ def main():
     trace.line(f"start {now()}")
     trace.line(f"briefs {briefs}, tool API {tool_api}, slot {slot}, builder model {MODEL}, limit {LIMIT_S} s")
     try:
-        asyncio.run(asyncio.wait_for(build(briefs, tool_api, slot, trace), timeout=LIMIT_S))
-    except asyncio.TimeoutError:
+        asyncio.run(build(briefs, tool_api, slot, trace))
+    except (asyncio.TimeoutError, TimeoutError):
         trace.line(f"time limit of {LIMIT_S} s reached: stopping the builder agent. The last saved workflow stands.")
     except Exception as e:
         trace.line(f"builder agent stopped with an error: {e!r}. The last saved workflow, if any, stands.")
