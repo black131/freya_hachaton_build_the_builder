@@ -138,12 +138,16 @@ def convert(src, out_dir):
                 text = pdf_text(f)
                 if text is None or len(text.strip()) < 40:
                     text, note = None, "PDF without extractable text here: open it with the Read tool"
+                else:
+                    note = f"text only; if it is a drawing, also open the original with the Read tool: {f.resolve()}"
             elif ext in IMAGES:
                 text, note = None, "image (a drawing): open it with the Read tool"
             else:
                 text, note = None, "unknown type: open it with the Read tool if it matters"
         except Exception as e:
             text, note = None, f"could not convert ({e!r}): open it with the Read tool"
+        if text is not None and len(text) > 120000:
+            note = "large: do not Read it whole; query it with a short Python script (json.load) for what you need"
         if text is not None:
             target.write_text(text, encoding="utf-8")
             rows.append((str(rel), str(target), f"{len(text)} chars", note))
