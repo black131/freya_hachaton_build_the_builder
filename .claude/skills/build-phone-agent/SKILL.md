@@ -72,9 +72,10 @@ If `FREYA_API_KEY` is not set, you cannot reach the platform: do steps 1 to 5, t
    - identity checking with a post-hook on the verify tool that says what to do next;
    - the account fetched in a `pre_actions` node, never left to the model;
    - account facts computed in code;
-   - one negotiation node with the decision table from the spec and no recording tools, and a
-     recording node entered on an extracted confirmation, with an `llm` entry that calls the tool at
-     once, never a silent entry (3.8, 3.9);
+   - ONE node that negotiates, reads back, records, notes and closes, with a strict order block
+     and a worked example in its prompt (3.9). Never split recording into its own node; never
+     enter a conversation node silently when the agent must act (3.8). `references/example_build.py`
+     shows this shape; copy the shape, never its content;
    - `close_call` in every node where a call can end, its enums cut down to that node's outcomes;
    - a transition on the close result into a silent end node.
    Take every URL, field and enum from the tool API file. Bake `customer_id` with
@@ -169,6 +170,7 @@ If `FREYA_API_KEY` is not set, you cannot reach the platform: do steps 1 to 5, t
 | File | Use |
 |---|---|
 | `references/architecture.md` | The workflow shape, why, and JSON recipes for each part. Read before step 4 |
+| `references/example_build.py` | The build script of an agent that passed every practice customer. Shape only, never content. Read before step 4 |
 | `references/reading-a-brief.md` | What to extract from a brief, raw bank material included. Read for step 2 |
 | `scripts/calendar_lib.py` | Business-day helpers that go in front of every code-node snippet |
 | `scripts/build_code.py` | Joins helpers and snippet, checks for doubled braces and syntax, runs it on example vars |

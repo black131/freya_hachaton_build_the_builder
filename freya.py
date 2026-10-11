@@ -12,11 +12,23 @@ HEADERS = {"Authorization": "Bearer " + os.environ.get("FREYA_API_KEY", ""), "Co
 def api(method, path, body=None, **params):
     """Call the API and return the `result` part of its {success, data: {message, result}} envelope."""
     q = "?" + urllib.parse.urlencode(params) if params else ""
-    req = urllib.request.Request(URL + path + q, data=json.dumps(body).encode() if body is not None else None, headers=HEADERS, method=method)
-    try:
-        with urllib.request.urlopen(req, timeout=120) as r: out = json.load(r)
-    except urllib.error.HTTPError as e:
-        raise RuntimeError(f"{method} {path} -> {e.code}: {e.read().decode()[:1500]}") from None
+    # A read (GET) that meets a passing platform error (502, 503, 504, a dropped connection) is tried again
+    # a few times instead of crashing a test or an export. Writes are never repeated: a repeated POST could
+    # start a second simulation or save twice.
+    tries = 6 if method == "GET" else 1
+    for attempt in range(tries):
+        req = urllib.request.Request(URL + path + q, data=json.dumps(body).encode() if body is not None else None, headers=HEADERS, method=method)
+        try:
+            with urllib.request.urlopen(req, timeout=120) as r: out = json.load(r)
+            break
+        except urllib.error.HTTPError as e:
+            if e.code in (502, 503, 504) and attempt < tries - 1:
+                time.sleep(10 * (attempt + 1)); continue
+            raise RuntimeError(f"{method} {path} -> {e.code}: {e.read().decode()[:1500]}") from None
+        except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+            if attempt < tries - 1:
+                time.sleep(10 * (attempt + 1)); continue
+            raise RuntimeError(f"{method} {path} -> connection error: {e}") from None
     return out.get("data", {}).get("result", out) if isinstance(out, dict) else out
 
 _ws = None

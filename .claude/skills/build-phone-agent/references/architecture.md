@@ -20,7 +20,7 @@ setup (code, passthrough)          computes date facts from `now` and the brief'
        -> identity (conversation)      security questions, one tool call per answer
             -> fetch_account (api_request, passthrough)   get_account, always, no model choice
                  -> account (code, passthrough)           per-product facts: band, deadline, floor, attempts
-                      -> collect (conversation)          state the debt, negotiate, read back, record
+                      -> collect (conversation)          state the debt, negotiate, read back, record, note, close (ONE node, 3.9)
   every conversation node that may end the call has close_call
        -> end (end_call)             entered when close_call returned ok
 ```
@@ -262,44 +262,57 @@ A tool field declared as `"default": "{{date}}"` is filled by the model only whi
 model never sees it. Give extracted and code-written variables names that no tool field uses
 (`wanted_date`, not `date`). The lint warns about this.
 
-### 3.8 Entering a node that must act at once
+### 3.8 Never enter a conversation node silently when the agent must act
 
 A conversation node with `on_enter: {"type": "silent"}` says nothing and WAITS FOR THE CUSTOMER.
-Seen in a practice run: the customer confirmed the read-back, the call moved to a silent
-recording node, the agent waited, the customer waited, and all three customers hung up with no
-promise recorded. Never make a conversation node silent when the agent must speak or call a
-tool as soon as it arrives. Silent is only for passthrough code and api_request nodes, for the
-end node, and for a conversation node whose first move belongs to the customer.
+Seen in a practice run: the call moved to a silent node after the customer's yes, both sides
+waited, and every customer hung up. Silent is only for passthrough code and api_request nodes,
+for the end node, and for a conversation node whose first move belongs to the customer. The lint
+reports it as an error when such a node has a recording tool.
 
-For a recording node use `on_enter: {"type": "llm", "prompt": "<what to do first>"}`, where the
-prompt says: call the record tool now for the first confirmed product, and say nothing before
-the call. The model's entry turn is then the tool call itself.
+### 3.9 Negotiate, read back, record and close in ONE node
 
-Do not use a filler line ("One moment please") either: the customer answers it, the answer
-starts a new turn while the tool call is in flight, and the tool is called twice. Fillers may
-also be spoken in the workspace's language instead of the call's language (seen: an English
-filler came out in Turkish). Every spoken line must come from the brief or your prompts.
+This is the design that passed every practice customer in four separate runs (plain speech,
+answers in pieces, self-corrections, and three repetitions). Keep it.
 
-Simplest of all: keep the read-back, the confirmation and the recording in one conversation
-node when the brief allows it, and gate the writes with the prompt and the post-hooks.
+- One conversation node (`collect`) holds the negotiation AND the read-back AND the record tool,
+  the note tool, the transfer tool and `close_call`. It is entered with a fixed `tts` line that
+  states the debt (3.6).
+- Do NOT split recording into a separate node. Tried twice, failed twice: a silent entry stalled
+  the call, and an `llm` entry made one tool call and then stopped, leaving promises unrecorded
+  and the call open.
+- Enforce the order in the prompt with a numbered block the model cannot misread, placed before
+  the negotiation rules, plus one worked example from the hardest case the brief describes:
 
-### 3.9 Gate the write tools by structure
+```text
+STRICT ORDER OF THE CALL (never skip a step):
+1. Negotiate every product, one at a time, in account order, until each has an agreed promise
+   or its persuasion attempts are all used (or it ended another way the brief names).
+2. Read ALL agreed promises back in ONE message ending with "<the brief's confirmation question>"
+   and WAIT for the customer's answer.
+3. Only after a clear yes: <record tool>, one per agreed product.
+4. <note tool> for each product without a promise (only if the brief uses notes).
+5. Thank, say goodbye, and call close_call in that same message.
+NEVER call <record tool> in the turn where the customer agrees to a date or amount: first do
+step 2 and wait.
+Example: <one customer turn that settles one product and refuses the others> = <what happens to
+each product, attempt by attempt>; only then step 2.
+```
 
-Seen in a practice run: the customer said "I'll pay the credit card tomorrow, not the other two",
-and in the same turn the agent recorded the promise with no read-back, noted the other two products
-as refused with no persuasion attempt, and closed the call. The prompt had every rule; the model
-skipped them because the tools were at hand. Rules in prompts drift; structure does not.
+- The tool descriptions repeat the gate: record "CALL it only after the customer said a clear yes
+  to the full read-back"; note "CALL it once per product without a recorded promise, after the
+  promises are recorded".
+- The post-hooks drive the sequence after the yes: a recorded promise says "call the record tool
+  for the next agreed product now; when all are recorded say <the brief's sentence>; then notes;
+  then close" (3.3).
+- Persuasion attempts: "Make the product's next attempt exactly as written in ACCOUNT FACTS. When
+  its attempts are used up, stop (never repeat a refused offer)". Do not add words such as
+  REQUIRED: seen in a practice run, that made the agent make more attempts than the brief allows.
 
-- The negotiation node has no tool that records a promise or a note. It can only talk (and
-  transfer or close where the brief allows that before an agreement).
-- Extract a state in the negotiation node, for example `deal_state` with values `confirmed` (the
-  customer said yes to the full read-back), `all_ended` (every product ended without an agreement,
-  and for each refused product every attempt listed in the account facts was said and refused;
-  one refusal of a product that has two attempts is not an end) and `continue`. Describe each value strictly.
-- A transition on that state leads to a recording node with
-  `on_enter: {"type": "llm", "prompt": "..."}` that acts at once (see 3.8; never silent). That node holds the record and note tools, `close_call`, and a prompt that records exactly
-  what was read back, notes what ended without a promise, then closes.
-- One tool call per message, and `close_call` only after every record and note result arrived.
+`references/example_build.py` is that passing build script for the kit's practice brief. Read it
+for the SHAPE: node graph, entry types, the hook helper, the order block, how facts reach the
+prompt. Every sentence, value, outcome and rule in it belongs to that one brief. Never copy any
+of them; write yours from your own spec.
 
 ### 3.10 Answers given in pieces
 
@@ -347,11 +360,5 @@ wherever a number or date is collected):
   refuses: make attempt 1 as written in the account facts; if refused again and the product has
   attempt 2, make it; only then record the refusal (note, outcome)." When several products are
   refused together, go through them one at a time in the account order.
-  Seen again, with amounts said in words: the agent made one attempt on a product that had two.
-  So write the attempts in the account facts as numbered, ready-to-say sentences, for example
-  "Attempt 1: ask for <full amount> on <date>. Attempt 2 (REQUIRED after attempt 1 is refused):
-  offer <floor> on <deadline>.", and give the product a line "This product ends only after
-  attempt <n> is refused." In the negotiation prompt: before you treat a product as ended, check
-  in the account facts that every attempt listed for it was said and refused.
 - **Keep prompts short.** Every rule in a prompt costs attention. Put rules where they apply, not
   in every node.
