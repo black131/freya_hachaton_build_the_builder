@@ -73,7 +73,8 @@ If `FREYA_API_KEY` is not set, you cannot reach the platform: do steps 1 to 5, t
    - the account fetched in a `pre_actions` node, never left to the model;
    - account facts computed in code;
    - one negotiation node with the decision table from the spec and no recording tools, and a
-     silent recording node entered on an extracted confirmation (3.9);
+     recording node entered on an extracted confirmation, with an `llm` entry that calls the tool at
+     once, never a silent entry (3.8, 3.9);
    - `close_call` in every node where a call can end, its enums cut down to that node's outcomes;
    - a transition on the close result into a silent end node.
    Take every URL, field and enum from the tool API file. Bake `customer_id` with

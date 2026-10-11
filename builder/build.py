@@ -67,6 +67,7 @@ def practice_brief_letter(slot):
 
 def make_guard(slot, trace):
     used = {"chat": 0, "tests": 0}
+    trace.guard_used = used
     allowed_letter = practice_brief_letter(slot)
 
     def command_text(cmd):
@@ -154,6 +155,9 @@ async def build(briefs, tool_api, slot, trace):
                         for l in str(out).splitlines():
                             if l.startswith(("PASS", "FAIL")) or "passed" in l: trace.line("      " + l[:200])
                         score = re.search(r"(\d+) / (\d+) passed", str(out))
+                        if not score and getattr(trace, "guard_used", None) and trace.guard_used["tests"] > 0:
+                            trace.guard_used["tests"] -= 1      # a platform error (504, crash) gave no result: not counted
+                            trace.line("      no result (platform error): this run is not counted against the limit")
                         wf_file = KIT / "out" / f"{slot}.workflow.json"
                         if score and wf_file.exists():
                             trace.tests.append({"passed": int(score.group(1)), "total": int(score.group(2)), "workflow": wf_file.read_text(encoding="utf-8")})

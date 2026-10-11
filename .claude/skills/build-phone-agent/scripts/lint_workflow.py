@@ -182,6 +182,12 @@ def main():
         if nt == "end_call":
             if trs: err("%s: end_call node has transitions" % w)
             if not n.get("terminal"): err("%s: end_call node has no terminal" % w)
+        if nt == "conversation" and (n.get("on_enter") or {}).get("type") == "silent":
+            names = {t.get("function", {}).get("name") for t in n.get("tools", []) or []}
+            if names & (WRITE_TOOLS - {"close_call", "transfer_to_agent", "schedule_callback"}):
+                err("%s: silent entry on a conversation node that must record. A silent conversation node waits for the customer, so the call stalls. Use on_enter {\"type\": \"llm\", \"prompt\": ...}." % w)
+            else:
+                warn("%s: silent entry on a conversation node: it waits for the customer to speak first. Make sure that is intended." % w)
         if nt == "conversation":
             if not trs and not any(t.get("function", {}).get("handler") == "__function__:end_call" for t in n.get("tools", []) or []):
                 warn("%s: conversation node with no transitions and no end_call tool: the call can never leave it" % w)

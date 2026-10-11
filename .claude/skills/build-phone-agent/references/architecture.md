@@ -262,14 +262,26 @@ A tool field declared as `"default": "{{date}}"` is filled by the model only whi
 model never sees it. Give extracted and code-written variables names that no tool field uses
 (`wanted_date`, not `date`). The lint warns about this.
 
-### 3.8 Recording without inviting the customer to speak
+### 3.8 Entering a node that must act at once
 
-Do the read-back, the confirmation and the recording in the same conversation node, or move to a
-recording node with `on_enter: {"type": "silent"}`. Never enter a node that must call tools at once
-with a filler line such as "One moment please": the customer answers it, the answer starts a new
-turn while the tool call is in flight, and the tool is called twice. Fillers may also be spoken in
-the workspace's own language instead of the call's language (seen: an English filler came out in
-Turkish). Every spoken line must come from the brief or from your prompts, in the brief's language.
+A conversation node with `on_enter: {"type": "silent"}` says nothing and WAITS FOR THE CUSTOMER.
+Seen in a practice run: the customer confirmed the read-back, the call moved to a silent
+recording node, the agent waited, the customer waited, and all three customers hung up with no
+promise recorded. Never make a conversation node silent when the agent must speak or call a
+tool as soon as it arrives. Silent is only for passthrough code and api_request nodes, for the
+end node, and for a conversation node whose first move belongs to the customer.
+
+For a recording node use `on_enter: {"type": "llm", "prompt": "<what to do first>"}`, where the
+prompt says: call the record tool now for the first confirmed product, and say nothing before
+the call. The model's entry turn is then the tool call itself.
+
+Do not use a filler line ("One moment please") either: the customer answers it, the answer
+starts a new turn while the tool call is in flight, and the tool is called twice. Fillers may
+also be spoken in the workspace's language instead of the call's language (seen: an English
+filler came out in Turkish). Every spoken line must come from the brief or your prompts.
+
+Simplest of all: keep the read-back, the confirmation and the recording in one conversation
+node when the brief allows it, and gate the writes with the prompt and the post-hooks.
 
 ### 3.9 Gate the write tools by structure
 
@@ -284,8 +296,8 @@ skipped them because the tools were at hand. Rules in prompts drift; structure d
   customer said yes to the full read-back), `all_ended` (every product ended without an agreement,
   and for each refused product every attempt listed in the account facts was said and refused;
   one refusal of a product that has two attempts is not an end) and `continue`. Describe each value strictly.
-- A transition on that state leads to a recording node with `on_enter: {"type": "silent"}` (see
-  3.8). That node holds the record and note tools, `close_call`, and a prompt that records exactly
+- A transition on that state leads to a recording node with
+  `on_enter: {"type": "llm", "prompt": "..."}` that acts at once (see 3.8; never silent). That node holds the record and note tools, `close_call`, and a prompt that records exactly
   what was read back, notes what ended without a promise, then closes.
 - One tool call per message, and `close_call` only after every record and note result arrived.
 
